@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 
 class DataListView extends StatefulWidget {
@@ -19,51 +20,38 @@ class DataListView extends StatefulWidget {
 
 class _DataListViewState extends State<DataListView> {
   bool isDownloading = false;
-  Dio? _dio;
-  CancelToken? _cancelToken;
-  double _downloadProgress = 0.0;
+  int _downloadProgress = 0;
 
-  Future<void> _startDownload(String url, String fileName) async {
+  void saveData(String url, String filename) async {
     setState(() {
       isDownloading = !isDownloading;
     });
 
-    final savePath = await getTemporaryDirectory();
-    final file = File('$savePath/$fileName');
+    Directory? directory;
+    directory = await getApplicationDocumentsDirectory();
+
+    File saveFile = File('${directory.path}/$filename');
+
+    var dio = Dio();
+    String fileUrl = url;
+    dio.options.headers['Content-Type'] = 'application/json';
+    dio.options.headers['Authorization'] = 'Token if present';
     try {
-      final response = await _dio?.download(
-        url,
-        file.path,
-        cancelToken: _cancelToken,
-        onReceiveProgress: (received, total) {
-           if (_cancelToken!.isCancelled) return;
-          setState(() {
-            _downloadProgress = received / total;
+      await dio.download(fileUrl, saveFile.path,
+          onReceiveProgress: (received, total) {
+        setState(() {
+          _downloadProgress = (((received / total) * 100).toInt());
 
-            print('........$_downloadProgress');
-          });
-        },
-      );
+          if(_downloadProgress == 100){
+            isDownloading = false;
+          }
+        });
+      });
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Download Complete: ${response?.data}'),
-      ));
+
     } catch (e) {
-      print('Download Error: $e');
+      print(e.toString());
     }
-  }
-
-  void _pauseDownload() {
-    _cancelToken!.cancel('Download paused');
-  }
-
-  void _resumeDownload(String url, String fileName) {
-    _cancelToken = CancelToken();
-    _startDownload(url, fileName);
-  }
-
-  void _stopDownload() {
-    _cancelToken!.cancel('Download stopped');
   }
 
   @override
@@ -78,12 +66,17 @@ class _DataListViewState extends State<DataListView> {
                 widget.data['title']!,
                 style: const TextStyle(fontSize: 16),
               ),
-              subtitle: _downloadProgress != 0.0
-                  ? Text('Downloaded - $_downloadProgress %')
+              subtitle: _downloadProgress != 0
+                  ? Text(
+                      'Downloaded - $_downloadProgress %',
+                      style: const TextStyle(color: Colors.blue),
+                    )
                   : const Text('Not Downloaded'),
               trailing: IconButton(
                   onPressed: () {
-                    _startDownload(widget.data['url']!, widget.data['title']!);
+                    if (isDownloading == false) {
+                      saveData(widget.data['url']!, widget.data['title']!);
+                    } else {}
                   },
                   icon: isDownloading
                       ? const Icon(Icons.pause)
