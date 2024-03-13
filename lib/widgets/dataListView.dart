@@ -1,14 +1,12 @@
 import 'dart:io';
+import 'package:file_download/models/vos/dataVo.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
+// ignore: must_be_immutable
 class DataListView extends StatefulWidget {
-  const DataListView({
-    super.key,
-    required this.data,
-  });
-
+  DataListView({super.key, required this.data});
   final Map<String, String> data;
 
   @override
@@ -17,38 +15,53 @@ class DataListView extends StatefulWidget {
 
 class _DataListViewState extends State<DataListView> {
   bool isDownloading = false;
+  bool isDownloadFinish = false;
   int _downloadProgress = 0;
   double percentate = 0;
-  CancelToken _cancelToken = CancelToken();
+  CancelToken? _cancelToken;
+  late Directory _externalDir;
 
-
-
-///file download
-  void downloadFile(String url, String filename) async {
+  ///file download
+  void downloadFile(String url, String filename, String id) async {
     setState(() {
-      isDownloading = !isDownloading;     
+      isDownloading = !isDownloading;
     });
 
     Directory? directory;
-    directory = await getTemporaryDirectory();
+    if (Platform.isIOS) {
+      directory = await getApplicationDocumentsDirectory();
+    } else if (Platform.isAndroid) {
+      directory = await getExternalStorageDirectory();
+    }
 
-    File saveFile = File('${directory.path}/$filename');
-
+    String saveFile = '${directory?.path}/$filename.pdf';
+    File file = File(saveFile);
     var dio = Dio();
     String fileUrl = url;
     dio.options.headers['Content-Type'] = 'application/json';
-    dio.options.headers['Authorization'] = 'Token if present';
     try {
-      await dio.download(fileUrl, saveFile.path,cancelToken: CancelToken(),
-          onReceiveProgress: (received, total) {
+      dio.download(fileUrl, file.path,
+          cancelToken: _cancelToken,
+          options: Options(
+              responseType: ResponseType.bytes,
+              followRedirects: false,
+              validateStatus: (status) {
+                return status! < 500;
+              }), onReceiveProgress: (received, total) {
         setState(() {
           _downloadProgress = (((received / total) * 100).toInt());
           percentate = _downloadProgress / 100;
-          if(_downloadProgress == 100){
+          if (_downloadProgress == 100) {
             isDownloading = false;
+            isDownloadFinish = true;
+
+             ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Downloaded Success!')));
           }
         });
       });
+
+      dataList[int.parse(id)]['downloadurl'] = file.path;
 
     } catch (e) {
       print(e.toString());
@@ -56,15 +69,56 @@ class _DataListViewState extends State<DataListView> {
   }
 
 //pause download
-  pauseDownload() {
-    _cancelToken.cancel("Download paused");
-    _cancelToken = CancelToken();
+  // pauseDownload() {
+  //   _cancelToken?.cancel("Download paused");
+  // }
+
+  // //resume download
+  // resumeDownload(String url, String filename) {
+  //   setState(() {
+  //     _cancelToken = CancelToken();
+  //     downloadFile(url, filename);
+  //   });
+  // }
+
+//fetching download file
+  Future<void> _getExternalStorageDirectory() async {
+    Directory? directory;
+    if (Platform.isIOS) {
+      directory = await getApplicationDocumentsDirectory();
+    } else if (Platform.isAndroid) {
+      directory = await getExternalStorageDirectory();
+    }
+
+    setState(() {
+      _externalDir = directory!;
+    });
+    _listFiles();
   }
 
+  Future<void> _listFiles() async {
+    List<FileSystemEntity> files = _externalDir.listSync();
+    setState(() {
+    });
 
-//resume download
-  resumeDownload() {
-    _cancelToken = CancelToken();
+    for (var element in files) {
+      String fileString = element.path.split('/').last;
+
+     String text = fileString.split(RegExp(r"(\.+)"))[0];
+
+     if(text == widget.data['title']){
+      setState(() {
+        isDownloadFinish = true;
+      });
+     }
+    }
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    _getExternalStorageDirectory();
   }
 
   @override
@@ -75,27 +129,37 @@ class _DataListViewState extends State<DataListView> {
         child: Column(
           children: [
             ListTile(
-              title: Text(
-                widget.data['title']!,
-                style: const TextStyle(fontSize: 16),
-              ),
-              subtitle: _downloadProgress != 0
-                  ? Text(
-                      'Downloaded - $_downloadProgress %',
-                      style: const TextStyle(color: Colors.blue),
-                    )
-                  : const Text('Not Downloaded'),
-              trailing: IconButton(
-                  onPressed: () {
-                      downloadFile(widget.data['url']!, widget.data['title']!);
+                title: Text(
+                  widget.data['title']!,
+                  style: const TextStyle(fontSize: 16),
+                ),
+                subtitle: _downloadProgress != 0
+                    ? Text(
+                        'Downloaded - $_downloadProgress %',
+                        style: const TextStyle(color: Colors.blue),
+                      )
+                    : const Text('Not Downloaded'),
+                trailing: InkWell(
+                  onTap: () {
+                    if (_downloadProgress == 100 || isDownloadFinish) {
+                      //
+                    } else {
+                      downloadFile(widget.data['url']!, widget.data['title']!,
+                          widget.data['index']!);
+                    }
                   },
-                  icon: isDownloading
+                  child: isDownloading
                       ? const Icon(Icons.pause)
-                      : const Icon(Icons.download)),
-            ),
-             LinearProgressIndicator(
+                      : isDownloadFinish
+                          ? const Icon(
+                              Icons.download_done,
+                              color: Colors.blue,
+                            )
+                          : const Icon(Icons.download),
+                )),
+            LinearProgressIndicator(
               minHeight: 1,
-              value: percentate,
+              value: isDownloadFinish ? 1 : percentate,
             )
           ],
         ),
