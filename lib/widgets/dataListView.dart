@@ -1,9 +1,6 @@
 import 'dart:io';
-import 'dart:isolate';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 
 class DataListView extends StatefulWidget {
@@ -21,14 +18,19 @@ class DataListView extends StatefulWidget {
 class _DataListViewState extends State<DataListView> {
   bool isDownloading = false;
   int _downloadProgress = 0;
+  double percentate = 0;
+  CancelToken _cancelToken = CancelToken();
 
-  void saveData(String url, String filename) async {
+
+
+///file download
+  void downloadFile(String url, String filename) async {
     setState(() {
-      isDownloading = !isDownloading;
+      isDownloading = !isDownloading;     
     });
 
     Directory? directory;
-    directory = await getApplicationDocumentsDirectory();
+    directory = await getTemporaryDirectory();
 
     File saveFile = File('${directory.path}/$filename');
 
@@ -37,21 +39,32 @@ class _DataListViewState extends State<DataListView> {
     dio.options.headers['Content-Type'] = 'application/json';
     dio.options.headers['Authorization'] = 'Token if present';
     try {
-      await dio.download(fileUrl, saveFile.path,
+      await dio.download(fileUrl, saveFile.path,cancelToken: CancelToken(),
           onReceiveProgress: (received, total) {
         setState(() {
           _downloadProgress = (((received / total) * 100).toInt());
-
+          percentate = _downloadProgress / 100;
           if(_downloadProgress == 100){
             isDownloading = false;
           }
         });
       });
 
-
     } catch (e) {
       print(e.toString());
     }
+  }
+
+//pause download
+  pauseDownload() {
+    _cancelToken.cancel("Download paused");
+    _cancelToken = CancelToken();
+  }
+
+
+//resume download
+  resumeDownload() {
+    _cancelToken = CancelToken();
   }
 
   @override
@@ -74,18 +87,16 @@ class _DataListViewState extends State<DataListView> {
                   : const Text('Not Downloaded'),
               trailing: IconButton(
                   onPressed: () {
-                    if (isDownloading == false) {
-                      saveData(widget.data['url']!, widget.data['title']!);
-                    } else {}
+                      downloadFile(widget.data['url']!, widget.data['title']!);
                   },
                   icon: isDownloading
                       ? const Icon(Icons.pause)
                       : const Icon(Icons.download)),
             ),
-            // const LinearProgressIndicator(
-            //   backgroundColor: Colors.amber,
-            //   minHeight: 1,
-            // )
+             LinearProgressIndicator(
+              minHeight: 1,
+              value: percentate,
+            )
           ],
         ),
       ),

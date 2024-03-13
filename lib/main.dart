@@ -1,5 +1,4 @@
 import 'package:file_download/views/bottom_tab_view.dart';
-import 'package:file_download/views/file_view.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -16,7 +15,7 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: ThemeData(
         fontFamily: 'poppins',
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple,primary: Colors.blue),
         useMaterial3: true,
       ),
       home:const BottomTabView(),
