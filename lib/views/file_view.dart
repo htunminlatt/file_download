@@ -17,8 +17,6 @@ class _FileViewState extends State<FileView> {
     super.initState();
   }
 
-  
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
